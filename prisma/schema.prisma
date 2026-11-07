@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// احراز هویت و مدیریت ادمین
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  fullName     String    @map("full_name")
+  passwordHash String    @map("password_hash")
+  role         AdminRole @default(operator)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  sessions     Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ارزیابی سالانه: فقط وقتی سال واقعی مشخص است از این مدل استفاده کنید.
+model PerformanceEvaluation {
+  id        String   @id @default(uuid())
+  memberId  String   @map("member_id")
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  year      Int      // سال شمسی واقعی، نه شماره شیت Score1/Score2/Score3
+  score     Float
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([memberId, year])
+  @@index([memberId, year])
+  @@map("performance_evaluations")
+}
+
+// اعضا و داده‌های قابل ورود از فایل اکسل
+model Member {
+  id                        String          @id @default(uuid())
+  employeeCode              String          @unique @map("employee_code") // ID فایل؛ نه شناسه UUID
+  nationalId                String?         @unique @map("national_id")   // در فایل موجود نیست
+  firstName                 String?         @map("first_name")
+  lastName                  String?         @map("last_name")
+  fullName                  String          @map("full_name") // هنگام ورود از نام و نام خانوادگی ساخته شود
+  department                String?
+
+  maritalStatus             MaritalStatus?  @map("marital_status")
+  childrenCount             Int?            @map("children_count")
+  veteranStatus             VeteranStatus?  @map("veteran_status")
+  educationLevel            EducationLevel? @map("education_level")
+
+  hireDate                  DateTime?       @map("hire_date")
+  membershipDate            DateTime?       @map("membership_date")
+  workExperienceYears       Float?          @map("work_experience_years")
+  fundMembershipYears       Float?          @map("fund_membership_years")
+  tenureAsOfDate            DateTime?       @map("tenure_as_of_date") // فقط اگر تاریخ مبنای سابقه معلوم شد
+
+  memberDeposit             BigInt?         @map("member_deposit")
+  employerDeposit           BigInt?         @map("employer_deposit")
+
+  // سه امتیاز فایل بدون نسبت‌دادن سال فرضی به آن‌ها
+  evaluationScore1          Float?          @map("evaluation_score_1")
+  evaluationScore2          Float?          @map("evaluation_score_2")
+  evaluationScore3          Float?          @map("evaluation_score_3")
+
+  // حضور کد پرسنلی در فهرست‌ها؛ اثبات‌کننده وام فعال یا درخواست نیست.
+  hasShortLoan              Boolean         @default(false) @map("has_short_loan")
+  hasLongLoan               Boolean         @default(false) @map("has_long_loan")
+
+  previousLoansCount        Int             @default(0) @map("previous_loans_count")
+  previousLoansSum          BigInt          @default(0) @map("previous_loans_sum")
+
+  status                    MemberStatus    @default(active)
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  applications              LoanApplication[]
+  evaluations               PerformanceEvaluation[]
+
+  @@index([status])
+  @@map("members")
+}
+
+model LoanPeriod {
+  id              String            @id @default(uuid())
+  title           String
+  allocatedBudget BigInt            @map("allocated_budget")
+  consumedBudget  BigInt            @default(0) @map("consumed_budget")
+  startDate       DateTime          @map("start_date")
+  endDate         DateTime          @map("end_date")
+  isActive        Boolean           @default(true) @map("is_active")
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  applications    LoanApplication[]
+
+  @@map("loan_periods")
+}
+
+model LoanApplication {
+  id              String            @id @default(uuid())
+  periodId        String            @map("period_id")
+  period          LoanPeriod        @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  memberId        String            @map("member_id")
+  member          Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  loanType        LoanType          @default(short_term) @map("loan_type")
+  hasActiveLoan   Boolean           @default(false) @map("has_active_loan")
+  requestedAmount BigInt            @map("requested_amount")
+  approvedAmount  BigInt?           @map("approved_amount")
+  score           Float             @default(0.0)
+  rank            Int?
+  scoreBreakdown  String?           @map("score_breakdown")
+  status          ApplicationStatus @default(queued)
+  isEmergency     Boolean           @default(false) @map("is_emergency")
+  appliedAt       DateTime          @default(now()) @map("applied_at")
+  awardedAt       DateTime?         @map("awarded_at")
+
+  @@unique([periodId, memberId, loanType])
+  @@index([periodId, rank])
+  @@index([status])
+  @@map("loan_applications")
+}
+
+enum AdminRole {
+  super_admin
+  operator
+  viewer
+}
+
+enum MaritalStatus {
+  single
+  married
+}
+
+enum LoanType {
+  short_term
+  long_term
+}
+
+enum VeteranStatus {
+  none
+  level_1
+  level_2
+  level_3
+}
+
+enum EducationLevel {
+  below_diploma
+  diploma
+  associate
+  bachelor
+  master
+  phd
+}
+
+enum MemberStatus {
+  active
+  suspended
+  resigned
+}
+
+enum ApplicationStatus {
+  queued
+  approved
+  awarded
+  rejected
+  cancelled
+}
