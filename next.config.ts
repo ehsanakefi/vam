@@ -1,11 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  cacheComponents: true,
+  // cacheComponents: true,
 
   allowedDevOrigins: ["localhost", "127.0.0.1", "192.168.1.101"],
 
-  partialPrefetching: true,
+  // partialPrefetching: true,
 
   turbopack: {
     rules: {

@@ -1,7 +1,7 @@
+// src/app/layout.tsx
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
 import "@/app/globals.css";
-import { AppShell } from "@/components/AppShell";
 
 export const metadata: Metadata = {
   title: "راهکار وام | پرتال رفاه کارکنان",
@@ -15,8 +15,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fa" dir="rtl">
-      <body>
-        <AppShell>{children}</AppShell>
+      <body className="min-h-screen bg-background antialiased">
+        {children}
         <Toaster position="top-center" richColors dir="rtl" />
       </body>
     </html>

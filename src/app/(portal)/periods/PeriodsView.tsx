@@ -1,8 +1,13 @@
-// src/app/periods/PeriodsView.tsx
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, CheckCircle2, Plus, WalletCards } from "lucide-react";
+import {
+  CalendarDays,
+  CheckCircle2,
+  Pencil,
+  Plus,
+  WalletCards,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   Button,
@@ -13,7 +18,7 @@ import {
   Progress,
 } from "@/components/ui";
 import { compactMoney, fa } from "@/lib/utils";
-import { createPeriod } from "./actions";
+import { createPeriod, editPeriod } from "./actions";
 
 interface PeriodItem {
   id: string;
@@ -23,6 +28,8 @@ interface PeriodItem {
   active: boolean;
   startDate: string;
   endDate: string;
+  startDateIso: string; // اضافه شد
+  endDateIso: string; // اضافه شد
 }
 
 export default function PeriodsView({
@@ -30,7 +37,12 @@ export default function PeriodsView({
 }: {
   initialPeriods: PeriodItem[];
 }) {
-  const [open, setOpen] = useState(false);
+  // استفاده از یک state برای مدیریت باز بودن مودال (چه برای ایجاد چه ویرایش)
+  // اگر null باشد یعنی مودال بسته است
+  const [editingPeriod, setEditingPeriod] = useState<PeriodItem | null>(null);
+  // حالت جداگانه برای ایجاد
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -38,12 +50,15 @@ export default function PeriodsView({
     setLoading(true);
 
     const formData = new FormData(event.currentTarget);
-    const res = await createPeriod(formData);
+    const res = editingPeriod
+      ? await editPeriod(editingPeriod.id, formData)
+      : await createPeriod(formData);
 
     setLoading(false);
     if (res.success) {
       toast.success(res.message);
-      setOpen(false);
+      setEditingPeriod(null);
+      setIsCreateOpen(false);
     } else {
       toast.error(res.message);
     }
@@ -55,7 +70,7 @@ export default function PeriodsView({
         title="دوره‌ها و مدیریت بودجه"
         description="تعریف چرخه‌های پرداخت و پایش مصرف منابع صندوق"
         action={
-          <Button onClick={() => setOpen(true)}>
+          <Button onClick={() => setIsCreateOpen(true)}>
             <Plus className="size-4 ml-1.5" />
             دوره جدید
           </Button>
@@ -86,14 +101,23 @@ export default function PeriodsView({
                 >
                   <WalletCards className="size-5" />
                 </span>
-                {period.active ? (
-                  <span className="status status-approved inline-flex items-center gap-1 text-xs">
-                    <CheckCircle2 className="size-3.5 text-emerald-600" />
-                    دوره فعال
-                  </span>
-                ) : (
-                  <span className="text-xs text-slate-400">پایان‌یافته</span>
-                )}
+                <div className="flex gap-2 items-center">
+                  {/* دکمه ویرایش داخل کارت منتقل شد */}
+                  <button
+                    onClick={() => setEditingPeriod(period)}
+                    className="p-2 text-slate-400 hover:text-teal-600 transition-colors"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  {period.active ? (
+                    <span className="status status-approved inline-flex items-center gap-1 text-xs">
+                      <CheckCircle2 className="size-3.5 text-emerald-600" />
+                      دوره فعال
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400">پایان‌یافته</span>
+                  )}
+                </div>
               </div>
 
               <h2 className="mt-5 text-lg font-bold">{period.title}</h2>
@@ -128,13 +152,24 @@ export default function PeriodsView({
         )}
       </div>
 
-      {open && (
-        <Modal title="ایجاد دوره تسهیلات جدید" onClose={() => setOpen(false)}>
-          <form className="space-y-4" onSubmit={handleSubmit}>
+      {(isCreateOpen || editingPeriod) && (
+        <Modal
+          title={editingPeriod ? "ویرایش دوره" : "ایجاد دوره تسهیلات جدید"}
+          onClose={() => {
+            setEditingPeriod(null);
+            setIsCreateOpen(false);
+          }}
+        >
+          <form
+            key={editingPeriod ? editingPeriod.id : "create"}
+            className="space-y-4"
+            onSubmit={handleSubmit}
+          >
             <Field
               name="title"
               label="عنوان دوره"
               placeholder="مثلاً دوره بهار ۱۴۰۴"
+              defaultValue={editingPeriod?.title}
               required
             />
             <Field
@@ -142,6 +177,7 @@ export default function PeriodsView({
               label="بودجه تخصیص‌یافته (تومان)"
               placeholder="15000000000"
               type="number"
+              defaultValue={editingPeriod?.budget.toString()}
               required
             />
 
@@ -150,14 +186,20 @@ export default function PeriodsView({
                 name="startDate"
                 label="تاریخ شروع"
                 type="date"
-                defaultValue={new Date().toISOString().split("T")[0]}
+                defaultValue={
+                  editingPeriod?.startDateIso ||
+                  new Date().toISOString().split("T")[0]
+                }
                 required
               />
               <Field
                 name="endDate"
                 label="تاریخ پایان"
                 type="date"
-                defaultValue={new Date().toISOString().split("T")[0]}
+                defaultValue={
+                  editingPeriod?.endDateIso ||
+                  new Date().toISOString().split("T")[0]
+                }
                 required
               />
             </div>
@@ -166,7 +208,7 @@ export default function PeriodsView({
               <input
                 type="checkbox"
                 name="isActive"
-                defaultChecked
+                defaultChecked={editingPeriod ? editingPeriod.active : true}
                 className="size-4 accent-teal-600 rounded"
               />
               این دوره به‌عنوان دوره فعال تنظیم شود
@@ -176,13 +218,19 @@ export default function PeriodsView({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setOpen(false)}
-                disabled={loading}
+                onClick={() => {
+                  setEditingPeriod(null);
+                  setIsCreateOpen(false);
+                }}
               >
                 انصراف
               </Button>
               <Button type="submit" disabled={loading}>
-                {loading ? "در حال ذخیره..." : "ایجاد دوره"}
+                {loading
+                  ? "در حال ذخیره..."
+                  : editingPeriod
+                    ? "ذخیره تغییرات"
+                    : "ایجاد دوره"}
               </Button>
             </div>
           </form>

@@ -128,7 +128,7 @@ model LoanApplication {
   awardedAt       DateTime?         @map("awarded_at")
 
   @@unique([periodId, memberId, loanType])
-  @@index([periodId, rank])
+  @@index([periodId,loanType, rank])
   @@index([status])
   @@map("loan_applications")
 }

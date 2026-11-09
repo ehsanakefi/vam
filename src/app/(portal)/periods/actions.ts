@@ -48,3 +48,42 @@ export async function createPeriod(formData: FormData) {
     return { success: false, message: "خطا در ثبت دوره جدید." };
   }
 }
+export async function editPeriod(id: string, formData: FormData) {
+  try {
+    const title = formData.get("title") as string;
+    const allocatedBudgetRaw = formData.get("allocatedBudget") as string;
+    const startDateRaw = formData.get("startDate") as string;
+    const endDateRaw = formData.get("endDate") as string;
+    const isActive = formData.get("isActive") === "on";
+
+    const cleanBudget = allocatedBudgetRaw.replace(/[,،\s]/g, "");
+    const allocatedBudget = BigInt(cleanBudget || 0);
+
+    await db.$transaction(async (tx) => {
+      // اگر دوره جدید فعال شده، سایر دوره‌ها غیرفعال شوند
+      if (isActive) {
+        await tx.loanPeriod.updateMany({
+          where: { id: { not: id }, isActive: true },
+          data: { isActive: false },
+        });
+      }
+
+      await tx.loanPeriod.update({
+        where: { id },
+        data: {
+          title,
+          allocatedBudget,
+          startDate: new Date(startDateRaw),
+          endDate: new Date(endDateRaw),
+          isActive,
+        },
+      });
+    });
+
+    revalidatePath("/periods");
+    return { success: true, message: "دوره با موفقیت ویرایش شد." };
+  } catch (error) {
+    console.error("Error updating period:", error);
+    return { success: false, message: "خطا در ویرایش دوره." };
+  }
+}

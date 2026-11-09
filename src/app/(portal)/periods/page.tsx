@@ -25,6 +25,8 @@ export default async function PeriodsPage() {
       active: p.isActive,
       startDate: startShamsi,
       endDate: endShamsi,
+      startDateIso: p.startDate.toISOString().split("T")[0],
+      endDateIso: p.endDate.toISOString().split("T")[0],
     };
   });
 

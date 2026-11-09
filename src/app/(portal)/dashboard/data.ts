@@ -1,20 +1,38 @@
 // src/app/dashboard/data.ts
 import { db } from "@/lib/db";
 
-export async function getDashboardData() {
-  // ۱. دوره فعال وام
-  const currentPeriod = await db.loanPeriod.findFirst({
-    where: { isActive: true },
-    orderBy: { createdAt: "desc" },
-  });
+export async function getDashboardData(requestedPeriodId?: string) {
+  // ۱. پیدا کردن دوره هدف (بر اساس آی‌دی ارسالی یا دوره فعال سیستم)
+  let targetPeriod = null;
 
-  const periodId = currentPeriod?.id;
+  if (requestedPeriodId) {
+    targetPeriod = await db.loanPeriod.findUnique({
+      where: { id: requestedPeriodId },
+    });
+  }
 
-  // تاریخ ۷ روز قبل برای درخواست‌های جدید هفته
+  // اگر دوره مشخص نشده بود یا در دیتابیس وجود نداشت، آخرین دوره فعال
+  if (!targetPeriod) {
+    targetPeriod = await db.loanPeriod.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  // در صورتی که دوره فعالی هم نبود، آخرین دوره تعریف‌شده در سامانه
+  if (!targetPeriod) {
+    targetPeriod = await db.loanPeriod.findFirst({
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  const periodId = targetPeriod?.id;
+
+  // تاریخ ۷ روز قبل برای درخواست‌های جدید هفته اخیر
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-  // ۲. اجرای کوئری‌های آماری دوره فعلی
+  // ۲. اجرای کوئری‌های آماری دوره انتخابی
   const [
     activeApplicantsCount,
     newThisWeekCount,
@@ -36,14 +54,14 @@ export async function getDashboardData() {
         })
       : 0,
 
-    // اضطراری‌های فعال
+    // اضطراری‌های در صف
     periodId
       ? db.loanApplication.count({
           where: { periodId, isEmergency: true, status: "queued" },
         })
       : 0,
 
-    // ۵ نفر اول صف
+    // ۵ نفر اول صف همین دوره
     periodId
       ? db.loanApplication.findMany({
           where: { periodId },
@@ -61,7 +79,7 @@ export async function getDashboardData() {
         })
       : [],
 
-    // خواندن تمام درخواست‌ها برای ساخت نمودارها
+    // تمام درخواست‌های همین دوره برای رسم نمودارها
     periodId
       ? db.loanApplication.findMany({
           where: { periodId },
@@ -76,7 +94,7 @@ export async function getDashboardData() {
   // ۳. محاسبه نمودار واحدها (Department Distribution)
   const deptCounts: Record<string, number> = {};
   allApplications.forEach((app) => {
-    const dept = app.member.department || "سایر";
+    const dept = app.member?.department || "سایر";
     deptCounts[dept] = (deptCounts[dept] || 0) + 1;
   });
 
@@ -95,7 +113,7 @@ export async function getDashboardData() {
   };
 
   allApplications.forEach((app) => {
-    const s = app.score;
+    const s = app.score ?? 0;
     if (s <= 20) scoreBuckets["۰ - ۲۰"]++;
     else if (s <= 40) scoreBuckets["۲۱ - ۴۰"]++;
     else if (s <= 60) scoreBuckets["۴۱ - ۶۰"]++;
@@ -108,15 +126,23 @@ export async function getDashboardData() {
     count,
   }));
 
-  // نکته مهم: فیلدهای BigInt پریسما را به Number تبدیل می‌کنیم تا به Client Component پاس داده شوند
+  // تبدیل مقادیر BigInt به Number برای عدم بروز خطای سریالایز در Client Components
   return {
-    period: currentPeriod
+    period: targetPeriod
       ? {
-          title: currentPeriod.title,
-          budget: Number(currentPeriod.allocatedBudget),
-          consumed: Number(currentPeriod.consumedBudget),
+          id: targetPeriod.id,
+          title: targetPeriod.title,
+          isActive: targetPeriod.isActive,
+          budget: Number(targetPeriod.allocatedBudget ?? 0n),
+          consumed: Number(targetPeriod.consumedBudget ?? 0n),
         }
-      : { title: "دوره‌ای یافت نشد", budget: 0, consumed: 0 },
+      : {
+          id: "",
+          title: "دوره‌ای یافت نشد",
+          isActive: false,
+          budget: 0,
+          consumed: 0,
+        },
     stats: {
       activeApplicants: activeApplicantsCount,
       newThisWeek: newThisWeekCount,
@@ -124,10 +150,10 @@ export async function getDashboardData() {
     },
     topQueue: topQueue.map((item) => ({
       id: item.id,
-      rank: item.rank,
-      score: item.score,
+      rank: item.rank ?? 0,
+      score: item.score ?? 0,
       status: item.status,
-      requestedAmount: Number(item.requestedAmount),
+      requestedAmount: Number(item.requestedAmount ?? 0n),
       member: {
         fullName: item.member.fullName,
         employeeCode: item.member.employeeCode,
