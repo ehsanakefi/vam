@@ -12,7 +12,6 @@ import {
   X,
   Trash2,
   Edit3,
-  ChevronLeft,
   Eye,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -30,14 +29,14 @@ import {
 export interface MemberItem {
   id: string;
   employeeCode: string;
-  nationalId: string;
+  nationalId: string | null;
   fullName: string;
   department: string | null;
-  educationLevel: string;
-  maritalStatus: string;
-  veteranStatus?: string;
-  childrenCount: number;
-  savingsBalance: number | bigint;
+  educationLevel: string | null;
+  maritalStatus: string | null;
+  veteranStatus?: string | null;
+  childrenCount: number | null;
+  savingsBalance?: number | bigint;
   previousLoansCount: number;
   status: string;
   hireDate?: string | Date;
@@ -110,7 +109,6 @@ export default function MembersView({
 
       const updatedFullName = formData.get("fullName") as string;
       const updatedDepartment = (formData.get("department") as string) || null;
-      const updatedSavings = Number(formData.get("savingsBalance") || 0);
 
       setMembers((prev) =>
         prev.map((m) =>
@@ -119,11 +117,13 @@ export default function MembersView({
                 ...m,
                 fullName: updatedFullName,
                 department: updatedDepartment,
-                savingsBalance: updatedSavings,
-                maritalStatus: formData.get("maritalStatus") as string,
+                maritalStatus:
+                  (formData.get("maritalStatus") as string) || null,
                 childrenCount: Number(formData.get("childrenCount") || 0),
-                educationLevel: formData.get("educationLevel") as string,
-                veteranStatus: formData.get("veteranStatus") as string,
+                educationLevel:
+                  (formData.get("educationLevel") as string) || null,
+                veteranStatus:
+                  (formData.get("veteranStatus") as string) || "none",
               }
             : m,
         ),
@@ -265,14 +265,17 @@ export default function MembersView({
                   <div>
                     <p className="text-xs text-slate-400">تحصیلات</p>
                     <p className="mt-0.5 font-medium">
-                      {educationLabel[member.educationLevel] ??
-                        member.educationLevel}
+                      {member.educationLevel
+                        ? ((educationLabel as Record<string, string>)[
+                            member.educationLevel
+                          ] ?? member.educationLevel)
+                        : "-"}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">موجودی صندوق</p>
                     <p className="mt-0.5 font-medium text-teal-700 font-semibold">
-                      {money(Number(member.savingsBalance))}
+                      {money(Number(member.savingsBalance || 0))}
                     </p>
                   </div>
                   <div>
@@ -335,13 +338,11 @@ export default function MembersView({
       {/* منوی کشویی سمت راست (Right Slide-over Drawer) */}
       {selectedMember && (
         <div className="fixed inset-0 z-[100] flex justify-end">
-          {/* پس‌زمینه تیره برای بستن با کلیک خارج */}
           <div
             className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
             onClick={() => setSelectedMember(null)}
           />
 
-          {/* محتوای پنل کشویی */}
           <aside
             dir="rtl"
             className="relative z-10 flex h-full w-full max-w-md flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-200"
@@ -395,7 +396,7 @@ export default function MembersView({
                     <div className="grid grid-cols-2 gap-3">
                       <InfoBox
                         label="کد ملی"
-                        value={selectedMember.nationalId}
+                        value={selectedMember.nationalId ?? "—"}
                       />
                       <InfoBox
                         label="واحد سازمانی"
@@ -411,13 +412,16 @@ export default function MembersView({
                       />
                       <InfoBox
                         label="تعداد فرزندان"
-                        value={`${fa.format(selectedMember.childrenCount)} فرزند`}
+                        value={`${fa.format(selectedMember.childrenCount ?? 0)} فرزند`}
                       />
                       <InfoBox
                         label="تحصیلات"
                         value={
-                          educationLabel[selectedMember.educationLevel] ??
                           selectedMember.educationLevel
+                            ? ((educationLabel as Record<string, string>)[
+                                selectedMember.educationLevel
+                              ] ?? selectedMember.educationLevel)
+                            : "—"
                         }
                       />
                       <InfoBox
@@ -441,7 +445,7 @@ export default function MembersView({
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-slate-500">موجودی پس‌انداز:</span>
                         <span className="font-bold text-teal-700 text-base">
-                          {money(Number(selectedMember.savingsBalance))}
+                          {money(Number(selectedMember.savingsBalance || 0))}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-sm border-t border-slate-200/80 pt-2.5">
@@ -481,7 +485,7 @@ export default function MembersView({
                       </label>
                       <select
                         name="maritalStatus"
-                        defaultValue={selectedMember.maritalStatus}
+                        defaultValue={selectedMember.maritalStatus ?? "single"}
                         className="input w-full text-sm"
                       >
                         <option value="single">مجرد</option>
@@ -503,7 +507,7 @@ export default function MembersView({
                     </label>
                     <select
                       name="educationLevel"
-                      defaultValue={selectedMember.educationLevel}
+                      defaultValue={selectedMember.educationLevel ?? "diploma"}
                       className="input w-full text-sm"
                     >
                       <option value="diploma">دیپلم</option>
@@ -528,18 +532,11 @@ export default function MembersView({
                       <option value="family">خانواده معظم شهدا</option>
                     </select>
                   </div>
-
-                  <Field
-                    name="savingsBalance"
-                    label="موجودی پس‌انداز (تومان)"
-                    type="number"
-                    defaultValue={String(selectedMember.savingsBalance)}
-                  />
                 </form>
               )}
             </div>
 
-            {/* فوتر پنل کشویی: دکمه‌های ذخیره، ویرایش، حذف */}
+            {/* فوتر پنل کشویی */}
             <div className="border-t border-slate-200 p-4 bg-slate-50 flex items-center justify-between gap-2">
               {!isEditing ? (
                 <>
@@ -586,6 +583,7 @@ export default function MembersView({
           </aside>
         </div>
       )}
+
       {/* مدال افزودن عضو جدید */}
       {modal === "add" && (
         <Modal title="افزودن عضو جدید" onClose={() => setModal(null)}>
@@ -659,14 +657,6 @@ export default function MembersView({
                 <option value="family">خانواده معظم شهدا و ایثارگران</option>
               </select>
             </div>
-
-            <Field
-              name="savingsBalance"
-              label="موجودی پس‌انداز (تومان)"
-              type="number"
-              placeholder="مثلاً 20000000"
-              defaultValue="0"
-            />
 
             <Field
               name="hireDate"

@@ -59,7 +59,7 @@ export async function getQueueData(selectedPeriodId?: string) {
       employeeCode: app.member.employeeCode,
       fullName: app.member.fullName,
       department: app.member.department || "تعریف نشده",
-      nationalId: app.member.nationalId,
+      nationalId: app.member.nationalId ?? "",
       maritalStatus: app.member.maritalStatus,
       childrenCount: app.member.childrenCount ?? 0,
       educationLevel: app.member.educationLevel,

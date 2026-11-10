@@ -18,7 +18,7 @@ export async function createMember(formData: FormData) {
         maritalStatus: data.maritalStatus as any,
         childrenCount: Number(data.childrenCount),
         educationLevel: data.educationLevel as any,
-        savingsBalance: Number(data.savingsBalance), // فرض بر این است که دیتابیس شما این فیلد را دارد
+        // savingsBalance: Number(data.savingsBalance), // فرض بر این است که دیتابیس شما این فیلد را دارد
         status: "active", // مقدار پیش‌فرض
         hireDate: new Date(data.hireDate as string),
         membershipDate: new Date(data.membershipDate as string),
@@ -45,7 +45,7 @@ export async function updateMember(id: string, formData: FormData) {
         maritalStatus: data.maritalStatus as any,
         childrenCount: Number(data.childrenCount),
         educationLevel: data.educationLevel as any,
-        savingsBalance: Number(data.savingsBalance),
+        // savingsBalance: Number(data.savingsBalance),
         veteranStatus: data.veteranStatus as any,
       },
     });
