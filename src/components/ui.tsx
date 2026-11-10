@@ -1,20 +1,62 @@
-import type {
-  ButtonHTMLAttributes,
-  InputHTMLAttributes,
-  ReactNode,
+import {
+  cloneElement,
+  isValidElement,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactElement,
+  type ReactNode,
 } from "react";
 import { X } from "lucide-react";
+
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type ButtonSize = "sm" | "md" | "lg" | "icon";
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  asChild?: boolean;
+};
 
 export function Button({
   children,
   variant = "primary",
+  size = "md",
+  asChild = false,
   className = "",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
-}) {
+}: ButtonProps) {
+  const sizeClasses: Record<ButtonSize, string> = {
+    sm: "px-2.5 py-1.5 text-xs",
+    md: "",
+    lg: "px-5 py-2.5 text-base",
+    icon: "size-9 p-0",
+  };
+
+  const buttonClassName = [
+    "btn",
+    `btn-${variant}`,
+    sizeClasses[size],
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (asChild && isValidElement(children)) {
+    const child = children as ReactElement<{
+      className?: string;
+      [key: string]: unknown;
+    }>;
+
+    return cloneElement(child, {
+      ...props,
+      className: [buttonClassName, child.props.className]
+        .filter(Boolean)
+        .join(" "),
+    });
+  }
+
   return (
-    <button className={`btn btn-${variant} ${className}`} {...props}>
+    <button className={buttonClassName} {...props}>
       {children}
     </button>
   );
