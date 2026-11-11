@@ -14,6 +14,8 @@ import {
   Edit3,
   Eye,
 } from "lucide-react";
+import { MEMBER_IMPORT_TYPES } from "@/lib/member-import-types";
+
 import { toast } from "sonner";
 import { MemberStatusBadge } from "@/components/StatusBadge";
 import { Button, Card, Input, Modal, PageTitle } from "@/components/ui";
@@ -54,6 +56,7 @@ export default function MembersView({
   const [status, setStatus] = useState("all");
   const [modal, setModal] = useState<"add" | "import" | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedImportType, setSelectedImportType] = useState("");
 
   // عضو انتخاب‌شده برای سایدبار راست
   const [selectedMember, setSelectedMember] = useState<MemberItem | null>(null);
@@ -692,41 +695,83 @@ export default function MembersView({
       )}
 
       {modal === "import" && (
-        <Modal title="ورود اطلاعات از اکسل" onClose={() => setModal(null)}>
+        <Modal
+          title="ورود اطلاعات از اکسل"
+          onClose={() => {
+            if (!isSubmitting) setModal(null);
+          }}
+        >
           <form
+            className="space-y-4"
             onSubmit={async (e) => {
               e.preventDefault();
-              const formEl = e.currentTarget;
-              const formData = new FormData(formEl);
-              setIsSubmitting(true);
-              const res = await importMembersFromExcel(formData);
-              setIsSubmitting(false);
+              const formData = new FormData(e.currentTarget);
 
-              if (res.success) {
-                toast.success(res.message);
-                setModal(null);
-                router.refresh();
-              } else {
-                toast.error(res.message);
+              setIsSubmitting(true);
+              try {
+                const res = await importMembersFromExcel(formData);
+
+                if (res.success) {
+                  toast.success(res.message);
+                  setModal(null);
+                  setSelectedImportType("");
+                  router.refresh();
+                } else {
+                  toast.error(res.message);
+                }
+              } catch {
+                toast.error("ارتباط با سرور برقرار نشد.");
+              } finally {
+                setIsSubmitting(false);
               }
             }}
-            className="space-y-4"
           >
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center">
-              <UsersRound className="mx-auto size-10 text-teal-700 mb-3" />
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                این فایل مربوط به کدام اطلاعات است؟
+              </label>
+
+              <select
+                name="importType"
+                className="input w-full"
+                required
+                value={selectedImportType}
+                onChange={(e) => setSelectedImportType(e.target.value)}
+                disabled={isSubmitting}
+              >
+                <option value="">نوع فایل را انتخاب کنید</option>
+                {MEMBER_IMPORT_TYPES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-6 text-center">
+              <FileSpreadsheet className="mx-auto mb-3 size-10 text-teal-700" />
+
               <p className="font-bold text-slate-800">
-                فایل اکسل output.xlsx را انتخاب کنید
+                {selectedImportType === "names"
+                  ? "ساختار: ستون A کد پرسنلی، ستون B نام، ستون C نام خانوادگی"
+                  : "ساختار: ستون A کد پرسنلی، ستون B مقدار"}
               </p>
-              <p className="mt-1 text-xs text-slate-400">
-                سازگار با ساختار تک‌شیتی و اطلاعات تجمیع‌شده اعضا
+
+              <p className="mt-2 text-xs text-slate-500">
+                فایل بدون هدر باشد؛ داده‌ها از ردیف اول شروع می‌شوند.
               </p>
 
               <input
+                key={selectedImportType}
                 type="file"
                 name="file"
-                accept=".xlsx, .xls"
+                accept=".xlsx,.xls"
                 required
-                className="mt-4 block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 cursor-pointer"
+                disabled={!selectedImportType || isSubmitting}
+                className="mt-4 block w-full cursor-pointer text-sm text-slate-500
+            file:mr-4 file:rounded-xl file:border-0 file:bg-teal-50
+            file:px-4 file:py-2 file:text-sm file:font-semibold
+            file:text-teal-700 hover:file:bg-teal-100"
               />
             </div>
 
@@ -739,7 +784,11 @@ export default function MembersView({
               >
                 انصراف
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+
+              <Button
+                type="submit"
+                disabled={isSubmitting || !selectedImportType}
+              >
                 {isSubmitting ? "در حال پردازش..." : "آپلود و درون‌ریزی"}
               </Button>
             </div>

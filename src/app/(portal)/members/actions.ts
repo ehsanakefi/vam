@@ -96,6 +96,7 @@ function parseEducation(val: string): EducationLevel {
   if (
     text.includes("ديپلم") ||
     text.includes("دیپلم") ||
+    text.includes("سوم ر اهنمائي") ||
     text.includes("ر اهنمائي")
   )
     return "diploma";
@@ -128,130 +129,328 @@ function parseVeteranStatus(val: string): VeteranStatus {
   }
   return "none";
 }
+import type { Prisma } from "@prisma/client";
+import {
+  MEMBER_IMPORT_TYPES,
+  type MemberImportType,
+} from "@/lib/member-import-types";
+
+type ImportPatch = Partial<
+  Pick<
+    Prisma.MemberUncheckedCreateInput,
+    | "firstName"
+    | "lastName"
+    | "fullName"
+    | "memberDeposit"
+    | "employerDeposit"
+    | "evaluationScore1"
+    | "evaluationScore2"
+    | "evaluationScore3"
+    | "educationLevel"
+    | "maritalStatus"
+    | "childrenCount"
+    | "veteranStatus"
+    | "workExperienceYears"
+    | "fundMembershipYears"
+    | "hasShortLoan"
+    | "hasLongLoan"
+  >
+>;
+
+class ImportValidationError extends Error {}
+
+function invalid(row: number, message: string): never {
+  throw new ImportValidationError(`ردیف ${row}: ${message}`);
+}
+
+function text(value: unknown): string {
+  return String(value ?? "")
+    .replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 1776))
+    .replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 1632))
+    .trim();
+}
+
+function label(value: unknown): string {
+  return text(value)
+    .toLowerCase()
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/[\s\u200c]/g, "");
+}
+
+function numericText(value: unknown): string {
+  return text(value)
+    .replace(/[٬،,\s]/g, "")
+    .replace(/٫/g, ".");
+}
+
+function decimalValue(value: unknown, row: number): number {
+  const raw = numericText(value);
+  if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+    invalid(row, "مقدار عددی معتبر نیست.");
+  }
+
+  const result = Number(raw);
+  if (!Number.isFinite(result)) {
+    invalid(row, "مقدار عددی خارج از محدوده است.");
+  }
+  return result;
+}
+
+function depositValue(value: unknown, row: number): bigint {
+  const raw = numericText(value);
+  console.log("%%%%%%%%%%", raw, value);
+  if (!/^\d+$/.test(raw)) {
+    invalid(row, "مبلغ باید عدد صحیح و غیرمنفی باشد.");
+  }
+
+  const result = BigInt(raw);
+  if (result > 9223372036854775807n) {
+    invalid(row, "مبلغ از محدوده مجاز دیتابیس بزرگ‌تر است.");
+  }
+  return result;
+}
+
+function educationValue(
+  value: unknown,
+  row: number,
+): NonNullable<ImportPatch["educationLevel"]> {
+  const v = label(value);
+
+  if (v === "below_diploma" || /زیر|کمتر|ابتدایی|راهنمایی|سیکل/.test(v))
+    return "below_diploma";
+  if (v === "associate" || /کاردانی|فوقدیپلم/.test(v)) return "associate";
+  if (v === "master" || /ارشد|فوقلیسانس/.test(v)) return "master";
+  if (v === "phd" || /دکتر/.test(v)) return "phd";
+  if (v === "bachelor" || /کارشناسی|لیسانس/.test(v)) return "bachelor";
+  if (v === "diploma" || /دیپلم/.test(v)) return "diploma";
+
+  return invalid(row, "مقطع تحصیلی ناشناخته است.");
+}
+
+function maritalValue(
+  value: unknown,
+  row: number,
+): NonNullable<ImportPatch["maritalStatus"]> {
+  const v = label(value);
+  if (v === "married" || v.includes("متاهل")) return "married";
+  if (v === "single" || v.includes("مجرد")) return "single";
+  return invalid(row, "وضعیت تأهل ناشناخته است.");
+}
+
+function veteranValue(
+  value: unknown,
+  row: number,
+): NonNullable<ImportPatch["veteranStatus"]> {
+  const v = label(value);
+
+  if (v === "none" || v === "عادی" || v === "خیر" || v.includes("غیرایثارگر")) {
+    return "none";
+  }
+
+  const level = v.match(/(?:level[_-]?|سطح)([123])/);
+  if (level) {
+    return `level_${level[1]}` as "level_1" | "level_2" | "level_3";
+  }
+
+  // وقتی فایل فقط «ایثارگر» گفته و سطحی مشخص نکرده است.
+  if (/ایثارگر|جانباز|رزمنده|رزمندگان|خانوادهشهدا/.test(v)) {
+    return "level_1";
+  }
+
+  return invalid(row, "وضعیت ایثارگری ناشناخته است.");
+}
+
+function booleanValue(value: unknown, row: number): boolean {
+  const v = label(value);
+  if (["بله", "دارد", "1", "true", "yes"].includes(v)) return true;
+  if (["خیر", "ندارد", "0", "false", "no"].includes(v)) return false;
+  return invalid(row, "برای این فایل مقدار «بله» یا «خیر» وارد کنید.");
+}
+
+function patchForRow(
+  type: MemberImportType,
+  cells: unknown[],
+  row: number,
+): ImportPatch {
+  // ۱. حالت نام‌ها (۳ ستون)
+  if (type === "names") {
+    const firstName = text(cells[1]);
+    const lastName = text(cells[2]);
+    if (!firstName || !lastName) {
+      invalid(row, "نام و نام خانوادگی هر دو الزامی هستند.");
+    }
+    return { firstName, lastName, fullName: `${firstName} ${lastName}` };
+  }
+
+  // ۲. حالت وام‌ها (فقط ستون ۱) - بدون نیاز به ستون دوم
+  if (type === "hasShortLoan") return { hasShortLoan: true };
+  if (type === "hasLongLoan") return { hasLongLoan: true };
+
+  // ۳. بقیه موارد (سایر فایل‌ها که ستون دوم دارند)
+  const value = cells[1];
+  if (text(value) === "") {
+    invalid(row, "مقدار ستون دوم خالی است.");
+  }
+
+  switch (type) {
+    case "memberDeposit":
+      return { memberDeposit: depositValue(value, row) };
+    case "employerDeposit":
+      return { employerDeposit: depositValue(value, row) };
+    case "evaluationScore1":
+      return { evaluationScore1: decimalValue(value, row) };
+    case "evaluationScore2":
+      return { evaluationScore2: decimalValue(value, row) };
+    case "evaluationScore3":
+      return { evaluationScore3: decimalValue(value, row) };
+    case "educationLevel":
+      return { educationLevel: educationValue(value, row) };
+    case "maritalStatus":
+      return { maritalStatus: maritalValue(value, row) };
+    case "childrenCount": {
+      const count = decimalValue(value, row);
+      if (!Number.isInteger(count) || count < 0 || count > 2147483647) {
+        invalid(row, "تعداد فرزندان باید عدد صحیح باشد.");
+      }
+      return { childrenCount: count };
+    }
+    case "veteranStatus":
+      return { veteranStatus: veteranValue(value, row) };
+    case "workExperienceYears": {
+      const years = decimalValue(value, row);
+      if (years < 0) invalid(row, "سابقه کار نمی‌تواند منفی باشد.");
+      return { workExperienceYears: years };
+    }
+    case "fundMembershipYears": {
+      const years = decimalValue(value, row);
+      if (years < 0) invalid(row, "سابقه عضویت نمی‌تواند منفی باشد.");
+      return { fundMembershipYears: years };
+    }
+  }
+  return {}; // Default fall-through
+}
 
 export async function importMembersFromExcel(formData: FormData) {
   try {
-    const file = formData.get("file") as File;
-    if (!file) {
-      return { success: false, message: "فایلی انتخاب نشده است." };
+    const file = formData.get("file");
+    const selectedType = formData.get("importType");
+
+    if (!(file instanceof File) || file.size === 0) {
+      return { success: false, message: "فایل اکسل انتخاب نشده است." };
     }
 
-    const bytes = await file.arrayBuffer();
+    if (!/\.(xlsx|xls)$/i.test(file.name)) {
+      return {
+        success: false,
+        message: "فقط فایل xlsx یا xls پذیرفته می‌شود.",
+      };
+    }
+
+    if (
+      typeof selectedType !== "string" ||
+      !MEMBER_IMPORT_TYPES.some((item) => item.value === selectedType)
+    ) {
+      return { success: false, message: "نوع فایل را انتخاب کنید." };
+    }
+
+    const type = selectedType as MemberImportType;
     const XLSX = await import("xlsx");
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const ref = worksheet?.["!ref"];
 
-    const workbook = XLSX.read(bytes, { type: "array" });
-    const sheetName = workbook.SheetNames[0]; // شیت Combined
-    if (!sheetName) {
-      return { success: false, message: "فایل اکسل فاقد شیت معتبر است." };
+    if (!ref) {
+      return { success: false, message: "شیت اول فایل خالی است." };
     }
 
-    const worksheet = workbook.Sheets[sheetName];
-    const rows: any[] = XLSX.utils.sheet_to_json(worksheet);
+    const firstRow = XLSX.utils.decode_range(ref).s.r + 1;
 
-    let importedCount = 0;
+    // header: 1 => ردیف اول نیز داده است؛ هیچ هدر الزامی نیست.
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+      header: 1,
+      raw: false,
+      defval: "",
+      blankrows: true,
+    });
 
-    for (const r of rows) {
-      const employeeCode = String(r["ID"] || "").trim();
-      if (!employeeCode) continue;
+    const entries: Array<{ employeeCode: string; patch: ImportPatch }> = [];
+    const seen = new Set<string>();
 
-      const firstName = String(r["نام"] || "").trim();
-      const lastName = String(r["نام  خانو ادگي"] || "").trim();
-      const fullName =
-        `${firstName} ${lastName}`.trim() || `کاربر ${employeeCode}`;
+    for (let i = 0; i < rows.length; i++) {
+      const cells = rows[i];
+      if (cells.every((cell) => text(cell) === "")) continue;
 
-      const keys = Object.keys(r);
+      const rowNumber = firstRow + i;
+      const employeeCode = text(cells[0]);
 
-      // یافتن کلیدهای پس‌انداز با ایمنی در برابر فاصله‌ها
-      const savings5Key =
-        keys.find((k) => k.includes("ذخيره 5")) ||
-        "ذخيره 5 % درصد پس انداز تا ماه جاري";
-      const savings7Key =
-        keys.find((k) => k.includes("ذخيره 7")) ||
-        "ذخيره 7%  درصدپس انداز (کارفرما) تا ماه جاري";
+      if (!employeeCode) invalid(rowNumber, "کد پرسنلی ستون اول خالی است.");
+      if (seen.has(employeeCode)) {
+        invalid(
+          rowNumber,
+          `کد پرسنلی ${employeeCode} در همین فایل تکراری است.`,
+        );
+      }
 
-      const memberDeposit = BigInt(Math.floor(Number(r[savings5Key] || 0)));
-      const employerDeposit = BigInt(Math.floor(Number(r[savings7Key] || 0)));
+      const expectedColumns =
+        type === "names"
+          ? 3
+          : type === "hasShortLoan" || type === "hasLongLoan"
+            ? 1
+            : 2;
 
-      // امتیازات ارزشیابی
-      const score1 = Number(r["امتیاز ارزشیابی"] || 0);
-      const score2 = Number(r["امتیاز ارزشیابی_Score2"] || 0);
-      const score3 = Number(r["امتیاز ارزشیابی_Score3"] || 0);
+      if (cells.slice(expectedColumns).some((cell) => text(cell) !== "")) {
+        invalid(rowNumber, `این نوع فایل فقط ${expectedColumns} ستون دارد.`);
+      }
 
-      const educationLevel = parseEducation(String(r["مقطع تحصيلي"] || ""));
-
-      const maritalKey =
-        keys.find((k) => k.includes("وضعیت تاهل")) || "وضعیت تاهل ";
-      const maritalStatus = parseMarital(String(r[maritalKey] || ""));
-
-      const childrenKey =
-        keys.find((k) => k.includes("تعداد اولاد")) || "تعداد اولاد ";
-      const childrenCount = Number(r[childrenKey] || 0);
-
-      const veteranKey =
-        keys.find((k) => k.includes("ایثارگری")) || "ایثارگری ";
-      const rawVeteran = String(r[veteranKey] || "");
-      const veteranStatus = parseVeteranStatus(rawVeteran);
-
-      // سابقه کار و صندوق
-      const workHistory = Number(r["سابقه کار"] || 0);
-      const fundMembership = Number(r["سابقه عضویت در صندوق"] || 0);
-
-      // وام‌ها
-      const hasShortLoan = String(r["Has_ShortLoan"] || "").trim() === "بله";
-      const hasLongLoan = String(r["Has_LongLoan"] || "").trim() === "بله";
-
-      await db.member.upsert({
-        where: { employeeCode },
-        update: {
-          fullName,
-          memberDeposit,
-          employerDeposit,
-          educationLevel,
-          maritalStatus,
-          childrenCount,
-          veteranStatus,
-          workExperienceYears: workHistory || null,
-          fundMembershipYears: fundMembership || null,
-          evaluationScore1: score1 || null,
-          evaluationScore2: score2 || null,
-          evaluationScore3: score3 || null,
-          hasShortLoan,
-          hasLongLoan,
-        },
-        create: {
-          employeeCode,
-          fullName,
-          memberDeposit,
-          employerDeposit,
-          educationLevel,
-          maritalStatus,
-          childrenCount,
-          veteranStatus,
-          workExperienceYears: workHistory || null,
-          fundMembershipYears: fundMembership || null,
-          evaluationScore1: score1 || null,
-          evaluationScore2: score2 || null,
-          evaluationScore3: score3 || null,
-          hasShortLoan,
-          hasLongLoan,
-          hireDate: new Date(),
-          membershipDate: new Date(),
-        },
+      seen.add(employeeCode);
+      entries.push({
+        employeeCode,
+        patch: patchForRow(type, cells, rowNumber),
       });
-
-      importedCount++;
     }
+
+    if (entries.length === 0) {
+      return { success: false, message: "هیچ ردیف داده‌ای در فایل یافت نشد." };
+    }
+
+    // اعتبارسنجی همه ردیف‌ها پیش از شروع نوشتن انجام شده است.
+    // تراکنش باعث می‌شود خطای دیتابیس، تغییرات همان فایل را برگرداند.
+    await db.$transaction(
+      async (tx) => {
+        for (const { employeeCode, patch } of entries) {
+          await tx.member.upsert({
+            where: { employeeCode },
+            update: patch,
+            create: {
+              employeeCode,
+              fullName: `کاربر ${employeeCode}`,
+              ...patch,
+            },
+          });
+        }
+      },
+      { maxWait: 10000, timeout: 120000 },
+    );
 
     revalidatePath("/members");
+
     return {
       success: true,
-      message: `${importedCount} پرونده با موفقیت از فایل اکسل درون‌ریزی/به‌روزرسانی شد.`,
+      message: `${entries.length} ردیف از فایل «${
+        MEMBER_IMPORT_TYPES.find((item) => item.value === type)?.label
+      }» ثبت/به‌روزرسانی شد.`,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Excel import error:", error);
+
     return {
       success: false,
-      message: error?.message || "خطا در پردازش فایل اکسل.",
+      message:
+        error instanceof ImportValidationError
+          ? error.message
+          : "درون‌ریزی انجام نشد؛ فایل و اتصال دیتابیس را بررسی کنید.",
     };
   }
 }
