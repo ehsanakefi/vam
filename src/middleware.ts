@@ -5,7 +5,6 @@ import type { NextRequest } from "next/server";
 export function middleware(request: NextRequest) {
   const token = request.cookies.get("session_token")?.value;
   const { pathname } = request.nextUrl;
-  console.log("token", token);
   const isLoginPage = pathname.startsWith("/login");
   const isProtectedPage =
     pathname.startsWith("/dashboard") ||
@@ -33,7 +32,7 @@ export const config = {
     "/login",
     "/dashboard/:path*",
     "/members/:path*",
+    "/queue/:path*",
     "/periods/:path*",
-    "/applications/:path*",
   ],
 };

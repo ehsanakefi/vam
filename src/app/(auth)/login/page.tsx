@@ -104,7 +104,7 @@ export default function LoginPage() {
                   name="username"
                   className="pr-11"
                   placeholder="نام کاربری"
-                  defaultValue="admin"
+                  // defaultValue="admin"
                 />
               </div>
               {errors.username && (
@@ -125,7 +125,7 @@ export default function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   className="px-11"
                   placeholder="حداقل ۶ نویسه"
-                  defaultValue="123456"
+                  // defaultValue="123456"
                 />
                 <Button
                   type="button"

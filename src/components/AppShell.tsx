@@ -1,9 +1,9 @@
 // src/components/AppShell.tsx
 "use client";
 
-import { useState, Suspense, type ReactNode } from "react";
+import { useState, Suspense, type ReactNode, useTransition } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   Bell,
   CalendarRange,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "./ui";
 import { PeriodSelector, PeriodOption } from "./PeriodSelector";
+import { logoutAction } from "@/app/(auth)/login/actions";
 
 const navItems = [
   { path: "/dashboard", label: "داشبورد مدیریتی", icon: LayoutDashboard },
@@ -32,7 +33,7 @@ interface AppShellProps {
 // بدنه اصلی شل که از هوک‌های کلاینتی استفاده می‌کند
 function AppShellContent({ children, periods = [] }: AppShellProps) {
   const pathname = usePathname();
-  const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
 
   const searchParams = useSearchParams();
@@ -43,7 +44,9 @@ function AppShellContent({ children, periods = [] }: AppShellProps) {
   }
 
   const handleLogout = () => {
-    router.push("/login");
+    startTransition(() => {
+      void logoutAction();
+    });
   };
 
   return (
@@ -123,7 +126,8 @@ function AppShellContent({ children, periods = [] }: AppShellProps) {
             </div>
             <button
               onClick={handleLogout}
-              className="text-slate-400 transition hover:text-rose-400"
+              disabled={pending}
+              className="text-slate-400 transition hover:text-rose-400 disabled:opacity-50"
               title="خروج از سامانه"
             >
               <LogOut className="size-4" />

@@ -424,12 +424,6 @@ async function main() {
     },
     { maxWait: 10_000, timeout: 30_000 },
   );
-
-  console.log(`✅ ادمین و ${rawMembers.length} عضو ایجاد شدند.`);
-  console.log(`✅ دوره: ${result.periodTitle}`);
-  console.log(
-    `✅ بودجه مصرف‌شده برای وام‌های پرداختی: ${result.paidAmount} تومان`,
-  );
 }
 
 main()

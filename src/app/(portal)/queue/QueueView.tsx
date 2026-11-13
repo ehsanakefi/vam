@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calculator,
@@ -62,10 +62,16 @@ export default function QueueView({
   const [sorting, setSorting] = useState<SortingState>([
     { id: "rank", desc: false },
   ]);
+  const [isPending, startTransition] = useTransition();
+
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("all");
   const [status, setStatus] = useState("all");
   const [busy, setBusy] = useState<string | null>(null);
+  const [items, setItems] = useState<QueueItem[]>(initialItems);
+  useEffect(() => {
+    setItems(initialItems);
+  }, [initialItems]);
 
   const counts = useMemo(
     () => ({
@@ -94,14 +100,44 @@ export default function QueueView({
     });
   }, [initialItems, loanType, department, status, search]);
 
+  async function handleRecalculate() {
+    if (busy) return;
+
+    setBusy("recalculate");
+    const toastId = toast.loading("در حال محاسبه دو صف...", {
+      id: "queue-scoring",
+    });
+
+    try {
+      const result = await syncAndRecalculateQueue(activePeriodId);
+
+      if (result.success) {
+        toast.success(result.message, { id: toastId });
+
+        // درخواست رفرش به Next.js در قالب transition
+        startTransition(() => {
+          router.refresh();
+        });
+      } else {
+        toast.error(result.message, { id: toastId });
+      }
+    } catch {
+      toast.error("ارتباط با سرور برقرار نشد.", { id: toastId });
+    } finally {
+      setBusy(null);
+    }
+  }
   async function handleDecision(
     item: QueueItem,
     decision: "approved" | "rejected",
   ) {
-    if (busy || item.status !== "queued") return;
+    if (busy) return;
 
+    const actionText = decision === "approved" ? "تأیید وام" : "رد/انصراف وام";
     setBusy(item.id);
-    toast.loading("در حال ثبت تصمیم...", { id: "queue-action" });
+    const toastId = toast.loading(`در حال ثبت ${actionText}...`, {
+      id: "loan-decision",
+    });
 
     try {
       const result =
@@ -109,47 +145,24 @@ export default function QueueView({
           ? await approveApplicationAction(item.id)
           : await rejectApplicationAction(item.id);
 
-      if (!result.success) {
-        toast.error(result.error ?? "ثبت تصمیم ناموفق بود.", {
-          id: "queue-action",
-        });
-        router.refresh();
-        return;
-      }
-
-      toast.success(
-        decision === "approved"
-          ? "وام تأیید شد و عضو به انتهای صف همین نوع وام رفت."
-          : "درخواست رد شد و عضو به انتهای صف همین نوع وام رفت.",
-        { id: "queue-action" },
-      );
-
-      setSelected(null);
-      router.refresh();
-    } catch {
-      toast.error("ارتباط با سرور برقرار نشد.", { id: "queue-action" });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function handleRecalculate() {
-    if (busy) return;
-
-    setBusy("recalculate");
-    toast.loading("در حال محاسبه دو صف...", { id: "queue-scoring" });
-
-    try {
-      const result = await syncAndRecalculateQueue(activePeriodId);
-
       if (result.success) {
-        toast.success(result.message, { id: "queue-scoring" });
-        router.refresh();
+        toast.success(
+          `درخواست با موفقیت ${decision === "approved" ? "تأیید" : "رد"} شد.`,
+          {
+            id: toastId,
+          },
+        );
+
+        startTransition(() => {
+          router.refresh();
+        });
       } else {
-        toast.error(result.message, { id: "queue-scoring" });
+        toast.error(result.error || `خطا در ثبت ${actionText}.`, {
+          id: toastId,
+        });
       }
     } catch {
-      toast.error("ارتباط با سرور برقرار نشد.", { id: "queue-scoring" });
+      toast.error("خطا در برقراری ارتباط با سرور.", { id: toastId });
     } finally {
       setBusy(null);
     }

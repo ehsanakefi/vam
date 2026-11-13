@@ -2,7 +2,7 @@
 import { db } from "@/lib/db";
 
 export async function getQueueData(selectedPeriodId?: string) {
-  // ۱. پیدا کردن دوره (یا بر اساس ID ارسالی از URL یا دوره فعال)
+  // ۱. پیدا کردن دوره (یا بر اساس ID ارسالی یا دوره فعال)
   let targetPeriod = null;
 
   if (selectedPeriodId) {
@@ -51,9 +51,13 @@ export async function getQueueData(selectedPeriodId?: string) {
     rank: app.rank ?? 0,
     status: app.status,
     isEmergency: app.isEmergency ?? false,
-    appliedAt: app.appliedAt.toISOString(),
+    appliedAt: app.appliedAt ? app.appliedAt.toISOString() : "",
     hasActiveLoan: app.hasActiveLoan,
-    scoreBreakdown: app.scoreBreakdown,
+    // اطمینان از اینکه JSON breakdown به آبجکت تبدیل می‌شود
+    scoreBreakdown:
+      typeof app.scoreBreakdown === "string"
+        ? JSON.parse(app.scoreBreakdown)
+        : (app.scoreBreakdown ?? null),
     member: {
       id: app.member.id,
       employeeCode: app.member.employeeCode,
@@ -64,12 +68,32 @@ export async function getQueueData(selectedPeriodId?: string) {
       childrenCount: app.member.childrenCount ?? 0,
       educationLevel: app.member.educationLevel,
       veteranStatus: app.member.veteranStatus,
-      memberDeposit: Number(app.member.memberDeposit ?? 0n),
-      employerDeposit: Number(app.member.employerDeposit ?? 0n),
+      performanceScore: (app.member as any).performanceScore ?? 100,
+      hireDate: (app.member as any).hireDate
+        ? new Date((app.member as any).hireDate).toLocaleDateString("fa-IR")
+        : "—",
+      membershipDate: (app.member as any).membershipDate
+        ? new Date((app.member as any).membershipDate).toLocaleDateString(
+            "fa-IR",
+          )
+        : "—",
+      employeeSavings: Number(app.member.memberDeposit ?? 0n),
+      employerSavings: Number(app.member.employerDeposit ?? 0n),
+      previousLoansCount: (app.member as any).previousLoansCount ?? 0,
+      previousLoansSum: Number((app.member as any).previousLoansSum ?? 0n),
       hasShortLoan: app.member.hasShortLoan,
       hasLongLoan: app.member.hasLongLoan,
     },
   }));
+  console.log(
+    "result",
+    items.map((item) => ({
+      id: item.id,
+      rank: item.rank,
+      score: item.score,
+      status: item.status,
+    })),
+  );
 
   return {
     items,

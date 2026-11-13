@@ -398,9 +398,14 @@ export default function MembersView({
                     </h4>
                     <div className="grid grid-cols-2 gap-3">
                       <InfoBox
-                        label="کد ملی"
-                        value={selectedMember.nationalId ?? "—"}
+                        label="تاریخ استخدام"
+                        value={String(selectedMember.hireDate ?? "—")}
                       />
+                      <InfoBox
+                        label="تاریخ عضویت"
+                        value={String(selectedMember.membershipDate ?? "—")}
+                      />
+
                       <InfoBox
                         label="واحد سازمانی"
                         value={selectedMember.department || "ثبت نشده"}

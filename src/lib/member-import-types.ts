@@ -11,8 +11,11 @@ export const MEMBER_IMPORT_TYPES = [
   { value: "veteranStatus", label: "وضعیت ایثارگری" },
   { value: "workExperienceYears", label: "سابقه کار" },
   { value: "fundMembershipYears", label: "سابقه عضویت در صندوق" },
-  { value: "hasShortLoan", label: "حضور در فهرست وام کوتاه‌مدت" },
-  { value: "hasLongLoan", label: "حضور در فهرست وام بلندمدت" },
+  {
+    value: "shortLoan",
+    label: "حضور در فهرست وام کوتاه‌مدت دریافت کرده اند",
+  },
+  { value: "longLoan", label: "حضور در فهرست وام بلندمدت دریافت کرده اند" },
 ] as const;
 
 export type MemberImportType = (typeof MEMBER_IMPORT_TYPES)[number]["value"];

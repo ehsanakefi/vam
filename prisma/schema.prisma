@@ -22,6 +22,14 @@ model User {
   @@map("users")
 }
 
+// prisma/schema.prisma
+model QueueLock {
+  periodId  String   @id
+  lockedAt  DateTime @default(now())
+  owner     String   // شناسه تصادفی درخواست که قفل را گرفته
+}
+
+
 model Session {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")

@@ -15,6 +15,8 @@ export interface ScoringMemberData {
   employerDeposit: bigint;
   evaluations: { score: number }[]; // نمرات ارزیابی ۳ سال اخیر
   hasActiveLoan: boolean; // آیا در شیت وام‌های تسویه‌نشده هست؟
+  workExperienceYears?: number | null;
+  fundMembershipYears?: number | null;
 }
 
 export interface ScoreBreakdown {
@@ -84,11 +86,12 @@ export function calculateMemberScore(
   }
 
   // ۵) سابقه کار: حداکثر ۳۰ امتیاز
-  const workYears = getYearsDiff(member.hireDate);
+  const workYears = member.workExperienceYears ?? getYearsDiff(member.hireDate);
   const workHistoryScore = Number(Math.min(workYears, 30).toFixed(2));
 
   // ۶) سابقه عضویت در صندوق: هر سال ۰.۴، حداکثر ۱۲ امتیاز
-  const membershipYears = getYearsDiff(member.membershipDate);
+  const membershipYears =
+    member.fundMembershipYears ?? getYearsDiff(member.membershipDate);
   const membershipScore = Number(
     Math.min(membershipYears * 0.4, 12).toFixed(2),
   );
