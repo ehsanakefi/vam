@@ -26,7 +26,7 @@ export default function LoginPage() {
     setErrors({});
 
     const formData = new FormData(event.currentTarget);
-    formData.append("remember", String(remember));
+    // formData.append("remember", String(remember));
 
     const result = loginSchema.safeParse({
       username: formData.get("username"),
@@ -151,6 +151,8 @@ export default function LoginPage() {
             <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600 select-none">
               <input
                 type="checkbox"
+                name="remember"
+                value="true"
                 checked={remember}
                 onChange={(event) => setRemember(event.target.checked)}
                 className="size-4 accent-teal-600 rounded"
