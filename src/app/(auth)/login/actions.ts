@@ -58,7 +58,7 @@ export async function loginAction(formData: FormData) {
 
   cookieStore.set("session_token", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: false,
     sameSite: "lax",
     expires: expiresAt,
     maxAge: durationSeconds,
